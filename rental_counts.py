@@ -5,7 +5,7 @@ from datetime import date
 #from scrapy.crawler import CrawlerProcess
 import sys
 import sqlite3
-#import requests
+import requests
 #import argparse
 #import validators
 #import urllib.parse
@@ -38,6 +38,17 @@ def format_price(price_string):
 #print("")
 
 
+RESPONSE_CODE_BAD_MIN = 400
+url_list = []
+url_filename = 'urls.txt'
+url_list = ['https://www.realtor.com/apartments/Montgomery-County_MD']
+for myurl in url_list:
+	response = requests.get(myurl)
+	if response.status_code > RESPONSE_CODE_BAD_MIN:
+		print("Failed to retrieve {0}".format(myurl))
+		sys.exit()
+	print(response.text)
+sys.exit()
 current_date = datetime.today().strftime('%Y-%m-%d')
 sqlite_directory = '/home/abba/maryland-politics/clean_slate_moco/rental_listings_rent_control'
 sqlite_file = 'rental_counts.sqlite'
@@ -62,19 +73,36 @@ output_file_path = pathlib.PurePath(sqlite_directory).joinpath(output_file)
 outfile = open(str(output_file_path),'w')
 outfile.write("Date\tRegion\tPrice Range\tRentals\n")
 
+rental_dict = {}
 for rental_count in rental_counts:
 	date_string = format_date(rental_count[0])
+	if date_string not in rental_dict:
+		rental_dict[date_string] = {}
+
+	region_string = rental_count[1]
+	if region_string not in rental_dict[date_string]:
+		rental_dict[date_string][region_string] = {}
+
 	price_string = format_price(rental_count[2])
-	row_string="{0}\t{1}\t{2}\t{3}\n".format(date_string,rental_count[1], price_string, rental_count[3])
-	outfile.write(row_string)
+	rental_dict[date_string][region_string][price_string] = rental_count[3]
+	#row_string="{0}\t{1}\t{2}\t{3}\n".format(date_string,rental_count[1], price_string, rental_count[3])
+	#outfile.write(row_string)
+outfile.write("Date\tRegion\tAny\tMax 2200\tMax 1500\n")
+
+for key1, value1 in rental_dict.items():
+	for key2, value2 in value1.items():
+		row_string="{0}\t{1}\t{2}\t{3}\t{4}\n".format(key1,key2,value2['Any'],value2['Max 2200'],value2['Max 1500'])
+		
+		#for key3, value3 in value2.items():
+		#	row_string="{0}\t{1}\t{2}\t{3}\n".format(key1,key2,key3,value2[key3])
+		outfile.write(row_string)
+
+
 
 outfile.close()
 sys.exit
 
 
-RESPONSE_CODE_BAD_MIN = 400
-url_list = []
-url_filename = 'urls.txt'
 
 '''
 if args.crawl == True:
