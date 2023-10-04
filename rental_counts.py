@@ -1,18 +1,32 @@
 from datetime import datetime
+from datetime import date
 #from bs4 import BeautifulSoup
 #from scrapy.spiders import SitemapSpider
 #from scrapy.crawler import CrawlerProcess
 import sys
+import sqlite3
 #import requests
 #import argparse
 #import validators
 #import urllib.parse
 import os
-#import shutil
+from shutil import copyfile
 import pathlib
 from pathlib import Path
 
+def format_date(date_string):
+	local_date = date.fromisoformat(date_string)
+	formatted_date = local_date.strftime('%m/%y')
+	return formatted_date
 
+def format_price(price_string):
+	match price_string:
+		case 0:
+			return "Any"
+		case 2200:
+			return "Max 2200"
+		case 1500:
+			return "Max 1500"
 #parser = argparse.ArgumentParser(
                     #prog='Documentation Retriever',
                     #description='Retrieves all HTML files in Brightspot\'s documentation sitemaps.',
@@ -27,13 +41,34 @@ from pathlib import Path
 current_date = datetime.today().strftime('%Y-%m-%d')
 sqlite_directory = '/home/abba/maryland-politics/clean_slate_moco/rental_listings_rent_control'
 sqlite_file = 'rental_counts.sqlite'
-sqlite_backup_file = 'rental_counts.sqlite.backup'
 
 sqlite_path = pathlib.PurePath(sqlite_directory).joinpath(sqlite_file)
 if not Path(sqlite_path).exists():
 	print("The database {0} does not exist. Exiting.".format(str(sqlite_path)))
-else:
-	print("found")
+	sys.exit
+
+sqlite_backup_file = 'rental_counts.sqlite.{0}'.format(current_date)
+sqlite_backup_path = pathlib.PurePath(sqlite_directory).joinpath(sqlite_backup_file)
+copyfile(sqlite_path, sqlite_backup_path)
+
+con = sqlite3.connect(str(sqlite_path))
+cur = con.cursor()
+select_statement = 'SELECT date as "Date", region as "Region", upper_limit AS "Price Range", rental_count as "Rentals" FROM rental_counts JOIN dates ON date_id = dates.ID JOIN regions ON region_id = regions.ID JOIN price_ranges ON price_range_id = price_ranges.ID'
+res = cur.execute(select_statement)
+rental_counts = res.fetchall()
+
+output_file = 'rental_counts.csv'
+output_file_path = pathlib.PurePath(sqlite_directory).joinpath(output_file)
+outfile = open(str(output_file_path),'w')
+outfile.write("Date\tRegion\tPrice Range\tRentals\n")
+
+for rental_count in rental_counts:
+	date_string = format_date(rental_count[0])
+	price_string = format_price(rental_count[2])
+	row_string="{0}\t{1}\t{2}\t{3}\n".format(date_string,rental_count[1], price_string, rental_count[3])
+	outfile.write(row_string)
+
+outfile.close()
 sys.exit
 
 
