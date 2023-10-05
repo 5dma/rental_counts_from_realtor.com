@@ -1,12 +1,12 @@
 from datetime import datetime
 from datetime import date
-#from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 #from scrapy.spiders import SitemapSpider
 #from scrapy.crawler import CrawlerProcess
 import sys
 import sqlite3
 import requests
-#import argparse
+import argparse
 #import validators
 #import urllib.parse
 import os
@@ -22,56 +22,106 @@ def format_date(date_string):
 def format_price(price_string):
 	match price_string:
 		case 0:
-			return "Any"
+			return ANY
 		case 2200:
-			return "Max 2200"
+			return MAX_2200
 		case 1500:
-			return "Max 1500"
-#parser = argparse.ArgumentParser(
-                    #prog='Documentation Retriever',
-                    #description='Retrieves all HTML files in Brightspot\'s documentation sitemaps.',
-                    #)
-#parser.add_argument('-c','--crawl',action='store_const',const=False, default=False)
-#args = parser.parse_args()
-#print("Running with following options:")
-#print("* Crawl sitemaps: {}".format(args.crawl))
-#print("")
+			return MAX_1500
 
 
-RESPONSE_CODE_BAD_MIN = 400
-url_list = []
-url_filename = 'urls.txt'
-url_list = ['https://www.realtor.com/apartments/Montgomery-County_MD']
-for myurl in url_list:
-	response = requests.get(myurl)
-	if response.status_code > RESPONSE_CODE_BAD_MIN:
-		print("Failed to retrieve {0}".format(myurl))
-		sys.exit()
-	print(response.text)
-sys.exit()
-current_date = datetime.today().strftime('%Y-%m-%d')
+def return_primary_key(cur, table_name,value):
+	select_statement = 'SELECT ID FROM {0} WHERE date="{1}"'.format(table_name,value)
+	res = cur.execute(select_statement)
+	return res.fetchone()[0]
+
+
+
+
+parser = argparse.ArgumentParser(
+                    prog='Rental Counter',
+                    description='Retrieves from realtor.com rental counts for various areas and price breaks',
+                    )
+parser.add_argument('-r','--retrieve',action='store_const',const=True, default=False,help='Retrieves new data from realtor.com')
+args = parser.parse_args()
+
+
+if (args.retrieve) == False:
+	print("No crawl")
+else:
+	print("Yes crawl")
+
 sqlite_directory = '/home/abba/maryland-politics/clean_slate_moco/rental_listings_rent_control'
 sqlite_file = 'rental_counts.sqlite'
-
 sqlite_path = pathlib.PurePath(sqlite_directory).joinpath(sqlite_file)
 if not Path(sqlite_path).exists():
 	print("The database {0} does not exist. Exiting.".format(str(sqlite_path)))
 	sys.exit
 
+current_date = datetime.today().strftime('%Y-%m-%d')
 sqlite_backup_file = 'rental_counts.sqlite.{0}'.format(current_date)
 sqlite_backup_path = pathlib.PurePath(sqlite_directory).joinpath(sqlite_backup_file)
 copyfile(sqlite_path, sqlite_backup_path)
 
 con = sqlite3.connect(str(sqlite_path))
 cur = con.cursor()
+
+ALL_MOCO = 'All MoCo'
+ROCKVILLE = 'Rockville'
+WHEATON = 'Wheaton'
+GAITHERSBURG = 'Gaithersburg'
+GERMANTOWN = 'Germantown'
+SILVER_SPRING = 'Silver Spring'
+ANY = 'Any'
+MAX_2200 = 'Max 2200'
+MAX_1500 = 'Max 1500'
+
+if args.retrieve == True:
+	RESPONSE_CODE_BAD_MIN = 400
+	url_dict = {
+		ALL_MOCO : {ANY: 'https://www.realtor.com/apartments/Montgomery-County_MD', MAX_2200: 'https://www.realtor.com/apartments/Montgomery-County_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Montgomery-County_MD/price-na-1500'},
+		ROCKVILLE : {ANY: 'https://www.realtor.com/apartments/Rockville_MD', MAX_2200: 'https://www.realtor.com/apartments/Rockville_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Rockville_MD/price-na-1500'},
+		WHEATON : {ANY: 'https://www.realtor.com/apartments/Wheaton_MD', MAX_2200: 'https://www.realtor.com/apartments/Wheaton_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Wheaton_MD/price-na-1500'},
+		GAITHERSBURG : {ANY: 'https://www.realtor.com/apartments/Gaithersburg_MD', MAX_2200: 'https://www.realtor.com/apartments/Gaithersburg_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Gaithersburg_MD/price-na-1500'},
+		GERMANTOWN : {ANY: 'https://www.realtor.com/apartments/Germantown_MD', MAX_2200: 'https://www.realtor.com/apartments/Germantown_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Germantown_MD/price-na-1500'},
+		SILVER_SPRING : {ANY: 'https://www.realtor.com/apartments/Silver-Spring_MD', MAX_2200: 'https://www.realtor.com/apartments/Silver-Spring_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Silver-Spring_MD/price-na-1500'}
+	}
+
+	insert_statement = 'INSERT INTO dates (date) VALUES ({0})'.format(current_date)
+	res = cur.execute(insert_statement)
+	con.commit()
+	
+
+	my_headers= {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'}
+	for region, value1 in url_dict.items():
+		for price_range, value2 in value1.items():
+			response = requests.get(value2, headers=my_headers)
+			if response.status_code > RESPONSE_CODE_BAD_MIN:
+				print("Failed to retrieve {0}".format(myurl))
+				print("Status code {0}",response.status_code)
+				sys.exit()
+	
+			soup = BeautifulSoup(response.text,'html.parser')
+			rental_number = soup.find('div',{'data-testid': 'total-results'})
+			date_id = return_primary_key(cur,'dates',current_date)
+			region_id = return_primary_key(cur,'regions',region)
+			price_range_id = return_primary_key(cur,'price_ranges',price_range)
+			insert_statement = 'INSERT INTO rental_counts (date_id, region_id, price_range_id, rental_count) VALUES ({0},{1},{2},{3})'.format(date_id, region_id, price_range_id, rental_number)
+			insert_statement = 'INSERT INTO dates (date) VALUES ({0})'.format(current_date)
+			res = cur.execute(select_statement)
+			con.commit()
+
+
+
+
 select_statement = 'SELECT date as "Date", region as "Region", upper_limit AS "Price Range", rental_count as "Rentals" FROM rental_counts JOIN dates ON date_id = dates.ID JOIN regions ON region_id = regions.ID JOIN price_ranges ON price_range_id = price_ranges.ID'
 res = cur.execute(select_statement)
+print(select_statement)
 rental_counts = res.fetchall()
 
 output_file = 'rental_counts.csv'
 output_file_path = pathlib.PurePath(sqlite_directory).joinpath(output_file)
 outfile = open(str(output_file_path),'w')
-outfile.write("Date\tRegion\tPrice Range\tRentals\n")
+outfile.write(f"Date\tRegion\t{ANY}\t{MAX_2200}\t{MAX_1500}\n")
 
 rental_dict = {}
 for rental_count in rental_counts:
@@ -85,67 +135,16 @@ for rental_count in rental_counts:
 
 	price_string = format_price(rental_count[2])
 	rental_dict[date_string][region_string][price_string] = rental_count[3]
-	#row_string="{0}\t{1}\t{2}\t{3}\n".format(date_string,rental_count[1], price_string, rental_count[3])
-	#outfile.write(row_string)
-outfile.write("Date\tRegion\tAny\tMax 2200\tMax 1500\n")
 
 for key1, value1 in rental_dict.items():
 	for key2, value2 in value1.items():
-		row_string="{0}\t{1}\t{2}\t{3}\t{4}\n".format(key1,key2,value2['Any'],value2['Max 2200'],value2['Max 1500'])
+		row_string="{0}\t{1}\t{2}\t{3}\t{4}\n".format(key1,key2,value2[ANY],value2[MAX_2200],value2[MAX_1500])
 		
 		#for key3, value3 in value2.items():
 		#	row_string="{0}\t{1}\t{2}\t{3}\n".format(key1,key2,key3,value2[key3])
 		outfile.write(row_string)
-
-
-
 outfile.close()
-sys.exit
-
-
-
-'''
-if args.crawl == True:
-	print("Crawling sitemaps...")
-	c = CrawlerProcess({
-	    'USER_AGENT': 'Mozilla/5.0',
-		'REQUEST_FINGERPRINTER_IMPLEMENTATION': '2.7',
-		'format': 'csv',
-	})
-	c.crawl(MySpider)
-	c.start()
-	url_list.sort()
-
-	# Save the URLS in a temporary file.
-	url_file = open(url_filename,"w")
-	for myurl in url_list:
-		url_file.write("{0}\n".format(myurl))
-	url_file.close()
-else:
-	print("Reading URLs from previously crawled sitemaps...")
-	url_file = None
-	try:
-		url_file = open(url_filename,"r")
-		data = url_file.read()
-		url_list = data.split("\n")
-		url_file.close()
-	except FileNotFoundError as e:
-		print("Exception occurred while reading the file {0}; {1}".format(url_filename,type(e).__name__))
-		sys.exit()
-
-	except Exception as e:
-		print("Exception occurred: {0}".format(type(e).__name__))
-		sys.exit()
-
-ignored_urls = ['https://www.brightspot.com/documentation/', 'https://www.brightspot.com/documentation/4-2-x-x', 'https://www.brightspot.com/documentation/4-5-x-x', 'https://www.brightspot.com/documentation/4-7-releases']
-
-headers= {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'}
-
-
-dirpath = 'xml_extracts'
-if os.path.exists(dirpath):
-	shutil.rmtree(dirpath, ignore_errors=True)
-os.mkdir(dirpath)
-'''
+con.close()
+print("All done!")
 
 
