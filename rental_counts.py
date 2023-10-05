@@ -1,14 +1,11 @@
 from datetime import datetime
 from datetime import date
+import time
 from bs4 import BeautifulSoup
-#from scrapy.spiders import SitemapSpider
-#from scrapy.crawler import CrawlerProcess
 import sys
 import sqlite3
 import requests
 import argparse
-#import validators
-#import urllib.parse
 import os
 from shutil import copyfile
 import pathlib
@@ -19,18 +16,10 @@ def format_date(date_string):
 	formatted_date = local_date.strftime('%m/%y')
 	return formatted_date
 
-def format_price(price_string):
-	match price_string:
-		case 0:
-			return ANY
-		case 2200:
-			return MAX_2200
-		case 1500:
-			return MAX_1500
 
-
-def return_primary_key(cur, table_name,value):
-	select_statement = 'SELECT ID FROM {0} WHERE date="{1}"'.format(table_name,value)
+def return_primary_key(cur, table_name,field_name,value):
+	select_statement = 'SELECT ID FROM {0} WHERE {1} = "{2}"'.format(table_name,field_name,value)
+	print(select_statement)
 	res = cur.execute(select_statement)
 	return res.fetchone()[0]
 
@@ -76,6 +65,15 @@ MAX_2200 = 'Max 2200'
 MAX_1500 = 'Max 1500'
 
 if args.retrieve == True:
+
+	insert_statement = 'INSERT INTO dates (date) VALUES ("{0}")'.format(current_date)
+	print(insert_statement)
+	try:
+		res = cur.execute(insert_statement)
+		con.commit()
+	except Exception as ex:
+		print("{0}: The date {1} already exists in the dates table, not adding again".format(ex.__class__.__name__,current_date))
+	
 	RESPONSE_CODE_BAD_MIN = 400
 	url_dict = {
 		ALL_MOCO : {ANY: 'https://www.realtor.com/apartments/Montgomery-County_MD', MAX_2200: 'https://www.realtor.com/apartments/Montgomery-County_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Montgomery-County_MD/price-na-1500'},
@@ -86,42 +84,35 @@ if args.retrieve == True:
 		SILVER_SPRING : {ANY: 'https://www.realtor.com/apartments/Silver-Spring_MD', MAX_2200: 'https://www.realtor.com/apartments/Silver-Spring_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Silver-Spring_MD/price-na-1500'}
 	}
 
-	insert_statement = 'INSERT INTO dates (date) VALUES ({0})'.format(current_date)
-	res = cur.execute(insert_statement)
-	con.commit()
-	
 
 	my_headers= {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'}
 	for region, value1 in url_dict.items():
-		for price_range, value2 in value1.items():
-			response = requests.get(value2, headers=my_headers)
+		for price_range, url in value1.items():
+			print("Fetching {0}".format(url))
+			response = requests.get(url, headers=my_headers)
 			if response.status_code > RESPONSE_CODE_BAD_MIN:
 				print("Failed to retrieve {0}".format(myurl))
 				print("Status code {0}",response.status_code)
 				sys.exit()
 	
 			soup = BeautifulSoup(response.text,'html.parser')
-			rental_number = soup.find('div',{'data-testid': 'total-results'})
-			date_id = return_primary_key(cur,'dates',current_date)
-			region_id = return_primary_key(cur,'regions',region)
-			price_range_id = return_primary_key(cur,'price_ranges',price_range)
+			rental_number_text = soup.find('div',{'data-testid': 'total-results'}).text
+			rental_number = int(rental_number_text.replace(',', ''))
+			date_id = return_primary_key(cur,'dates','date',current_date)
+			region_id = return_primary_key(cur,'regions','region',region)
+			price_range_id = return_primary_key(cur,'price_ranges','upper_limit',price_range)
 			insert_statement = 'INSERT INTO rental_counts (date_id, region_id, price_range_id, rental_count) VALUES ({0},{1},{2},{3})'.format(date_id, region_id, price_range_id, rental_number)
-			insert_statement = 'INSERT INTO dates (date) VALUES ({0})'.format(current_date)
-			res = cur.execute(select_statement)
+			print(insert_statement)
+			res = cur.execute(insert_statement)
 			con.commit()
+			time.sleep(60)
 
 
-
-
-select_statement = 'SELECT date as "Date", region as "Region", upper_limit AS "Price Range", rental_count as "Rentals" FROM rental_counts JOIN dates ON date_id = dates.ID JOIN regions ON region_id = regions.ID JOIN price_ranges ON price_range_id = price_ranges.ID'
+select_statement = 'SELECT date, region, upper_limit, rental_count FROM rental_counts JOIN dates ON date_id = dates.ID JOIN regions ON region_id = regions.ID JOIN price_ranges ON price_range_id = price_ranges.ID'
 res = cur.execute(select_statement)
 print(select_statement)
 rental_counts = res.fetchall()
 
-output_file = 'rental_counts.csv'
-output_file_path = pathlib.PurePath(sqlite_directory).joinpath(output_file)
-outfile = open(str(output_file_path),'w')
-outfile.write(f"Date\tRegion\t{ANY}\t{MAX_2200}\t{MAX_1500}\n")
 
 rental_dict = {}
 for rental_count in rental_counts:
@@ -133,8 +124,15 @@ for rental_count in rental_counts:
 	if region_string not in rental_dict[date_string]:
 		rental_dict[date_string][region_string] = {}
 
-	price_string = format_price(rental_count[2])
+	price_string = rental_count[2]
 	rental_dict[date_string][region_string][price_string] = rental_count[3]
+
+print(rental_dict)
+
+output_file = 'rental_counts.csv'
+output_file_path = pathlib.PurePath(sqlite_directory).joinpath(output_file)
+outfile = open(str(output_file_path),'w')
+outfile.write(f"Date\tRegion\t{ANY}\t{MAX_2200}\t{MAX_1500}\n")
 
 for key1, value1 in rental_dict.items():
 	for key2, value2 in value1.items():
