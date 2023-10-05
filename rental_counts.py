@@ -66,6 +66,11 @@ MAX_1500 = 'Max 1500'
 
 if args.retrieve == True:
 
+	saved_html_path = pathlib.PurePath(sqlite_directory).joinpath(current_date)
+	if not Path(saved_html_path).exists():
+		Path(saved_html_path).mkdir()
+		
+
 	insert_statement = 'INSERT INTO dates (date) VALUES ("{0}")'.format(current_date)
 	print(insert_statement)
 	try:
@@ -95,6 +100,13 @@ if args.retrieve == True:
 				print("Status code {0}",response.status_code)
 				sys.exit()
 	
+		
+			html_filename = (region + "_" + price_range + ".html").replace(' ','_')
+			html_path = pathlib.PurePath(saved_html_path).joinpath(html_filename)
+			html_handle = open(html_path,'w')
+			html_handle.write(response.text)
+			html_handle.close()
+
 			soup = BeautifulSoup(response.text,'html.parser')
 			rental_number_text = soup.find('div',{'data-testid': 'total-results'}).text
 			rental_number = int(rental_number_text.replace(',', ''))
@@ -102,7 +114,6 @@ if args.retrieve == True:
 			region_id = return_primary_key(cur,'regions','region',region)
 			price_range_id = return_primary_key(cur,'price_ranges','upper_limit',price_range)
 			insert_statement = 'INSERT INTO rental_counts (date_id, region_id, price_range_id, rental_count) VALUES ({0},{1},{2},{3})'.format(date_id, region_id, price_range_id, rental_number)
-			print(insert_statement)
 			res = cur.execute(insert_statement)
 			con.commit()
 			time.sleep(60)
