@@ -19,7 +19,6 @@ def format_date(date_string):
 
 def return_primary_key(cur, table_name,field_name,value):
 	select_statement = 'SELECT ID FROM {0} WHERE {1} = "{2}"'.format(table_name,field_name,value)
-	print(select_statement)
 	res = cur.execute(select_statement)
 	return res.fetchone()[0]
 
@@ -54,6 +53,8 @@ copyfile(sqlite_path, sqlite_backup_path)
 con = sqlite3.connect(str(sqlite_path))
 cur = con.cursor()
 
+
+
 ALL_MOCO = 'All MoCo'
 ROCKVILLE = 'Rockville'
 WHEATON = 'Wheaton'
@@ -72,7 +73,6 @@ if args.retrieve == True:
 		
 
 	insert_statement = 'INSERT INTO dates (date) VALUES ("{0}")'.format(current_date)
-	print(insert_statement)
 	try:
 		res = cur.execute(insert_statement)
 		con.commit()
@@ -93,6 +93,17 @@ if args.retrieve == True:
 	my_headers= {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'}
 	for region, value1 in url_dict.items():
 		for price_range, url in value1.items():
+
+			date_id = return_primary_key(cur,'dates','date',current_date)
+			region_id = return_primary_key(cur,'regions','region',region)
+			price_range_id = return_primary_key(cur,'price_ranges','upper_limit',price_range)
+
+			sel = "SELECT ID FROM rental_counts WHERE date_id={0} AND region_ID={1} AND price_range_id={2}".format(date_id, region_id, price_range_id) 
+			res = cur.execute(sel)
+			rental_counts = res.fetchone()
+			if rental_counts is not None:
+				continue
+
 			print("Fetching {0}".format(url))
 			response = requests.get(url, headers=my_headers)
 			if response.status_code > RESPONSE_CODE_BAD_MIN:
@@ -110,9 +121,6 @@ if args.retrieve == True:
 			soup = BeautifulSoup(response.text,'html.parser')
 			rental_number_text = soup.find('div',{'data-testid': 'total-results'}).text
 			rental_number = int(rental_number_text.replace(',', ''))
-			date_id = return_primary_key(cur,'dates','date',current_date)
-			region_id = return_primary_key(cur,'regions','region',region)
-			price_range_id = return_primary_key(cur,'price_ranges','upper_limit',price_range)
 			insert_statement = 'INSERT INTO rental_counts (date_id, region_id, price_range_id, rental_count) VALUES ({0},{1},{2},{3})'.format(date_id, region_id, price_range_id, rental_number)
 			res = cur.execute(insert_statement)
 			con.commit()
@@ -121,7 +129,6 @@ if args.retrieve == True:
 
 select_statement = 'SELECT date, region, upper_limit, rental_count FROM rental_counts JOIN dates ON date_id = dates.ID JOIN regions ON region_id = regions.ID JOIN price_ranges ON price_range_id = price_ranges.ID'
 res = cur.execute(select_statement)
-print(select_statement)
 rental_counts = res.fetchall()
 
 
@@ -138,7 +145,6 @@ for rental_count in rental_counts:
 	price_string = rental_count[2]
 	rental_dict[date_string][region_string][price_string] = rental_count[3]
 
-print(rental_dict)
 
 output_file = 'rental_counts.csv'
 output_file_path = pathlib.PurePath(sqlite_directory).joinpath(output_file)
@@ -148,9 +154,6 @@ outfile.write(f"Date\tRegion\t{ANY}\t{MAX_2200}\t{MAX_1500}\n")
 for key1, value1 in rental_dict.items():
 	for key2, value2 in value1.items():
 		row_string="{0}\t{1}\t{2}\t{3}\t{4}\n".format(key1,key2,value2[ANY],value2[MAX_2200],value2[MAX_1500])
-		
-		#for key3, value3 in value2.items():
-		#	row_string="{0}\t{1}\t{2}\t{3}\n".format(key1,key2,key3,value2[key3])
 		outfile.write(row_string)
 outfile.close()
 con.close()
