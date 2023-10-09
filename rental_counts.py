@@ -6,7 +6,6 @@ import sys
 import sqlite3
 import requests
 import argparse
-import os
 from shutil import copyfile
 import pathlib
 from pathlib import Path
@@ -22,9 +21,6 @@ def return_primary_key(cur, table_name,field_name,value):
 	res = cur.execute(select_statement)
 	return res.fetchone()[0]
 
-
-
-
 parser = argparse.ArgumentParser(
                     prog='Rental Counter',
                     description='Retrieves from realtor.com rental counts for various areas and price breaks',
@@ -34,9 +30,9 @@ args = parser.parse_args()
 
 
 if (args.retrieve) == False:
-	print("No crawl")
+	print("Not retrieving new data from network.")
 else:
-	print("Yes crawl")
+	print("Retrieving new data from network...")
 
 sqlite_directory = '/home/abba/maryland-politics/clean_slate_moco/rental_listings_rent_control'
 sqlite_file = 'rental_counts.sqlite'
