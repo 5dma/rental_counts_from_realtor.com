@@ -9,6 +9,28 @@ import argparse
 from shutil import copyfile
 import pathlib
 from pathlib import Path
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import pandas as pd
+
+
+# Source: https://matplotlib.org/stable/gallery/lines_bars_and_markers/barchart.html#sphx-glr-gallery-lines-bars-and-markers-barchart-py
+
+def make_plot(periods):
+
+	#periods = ("07/26", "10/23")
+	rental_counts = {
+	    'Any': (2776, 2554),
+	    'Max $2200/mo': (1434, 1216),
+	    'Max $1500/mo': (158, 116)
+	}
+
+	cmap = mpl.colors.ListedColormap(["#004586", "#FF420E", "#FFD320"])
+
+	df = pd.DataFrame(rental_counts, periods)
+	df.plot.bar(colormap=cmap, sharex = True, sharey = True, figsize=(8,4), ylim = (0,3000), ylabel="# listings", title = "All MoCo", rot = 0)
+	plt.legend(loc='lower center', ncols=3, bbox_to_anchor=(0.5,-.20,0,0))
+	plt.savefig('/tmp/foo.png', bbox_inches='tight')
 
 def format_date(date_string):
 	local_date = date.fromisoformat(date_string)
@@ -152,6 +174,30 @@ for key1, value1 in rental_dict.items():
 		row_string="{0}\t{1}\t{2}\t{3}\t{4}\n".format(key1,key2,value2[ANY],value2[MAX_2200],value2[MAX_1500])
 		outfile.write(row_string)
 outfile.close()
+
+select_statement = 'SELECT DISTINCT SUBSTR(date,0,8) FROM dates ORDER BY ID'
+res = cur.execute(select_statement)
+date_labels = res.fetchall()
+
+periods = []
+for my_date in date_labels:
+	print(my_date[0])
+	my_datetime = datetime.strptime(my_date[0],'%Y-%m')
+	my_string = my_datetime.strftime("%m/%y")
+	periods.append(my_string)
+
+select_statement = 'SELECT  SUBSTR(date,0,8) as mydate, region, upper_limit, AVG(rental_count) FROM rental_counts JOIN dates ON date_id = dates.ID JOIN regions ON region_id = regions.ID JOIN price_ranges ON price_range_id = price_ranges.ID GROUP BY mydate, region,upper_limit ORDER BY mydate,region,price_ranges.ID'
+
+data_table = {}
+res = cur.execute(select_statement)
+data_table = res.fetchall()
+for each row in data_table:
+	if 
+
+
+
+
+
 con.close()
 print("All done!")
 
