@@ -52,7 +52,7 @@ if (args.retrieve) == False:
 else:
 	print("Retrieving new data from network...")
 
-sqlite_directory = '/tmp/rental'
+sqlite_directory = '/home/abba/maryland-politics/clean_slate_moco/rental_listings_rent_control'
 sqlite_file = 'rental_counts.sqlite'
 sqlite_path = pathlib.PurePath(sqlite_directory).joinpath(sqlite_file)
 if not Path(sqlite_path).exists():
@@ -107,7 +107,7 @@ if args.retrieve == True:
 		SILVER_SPRING : {ANY: 'https://www.realtor.com/apartments/Silver-Spring_MD', MAX_2200: 'https://www.realtor.com/apartments/Silver-Spring_MD/price-na-2200', MAX_1500: 'https://www.realtor.com/apartments/Silver-Spring_MD/price-na-1500'}
 	}
 
-	my_headers= {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'}
+	my_headers= {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/118.0'}
 	# For each region and price point, go retrieve the web page.
 	for region, value1 in url_dict.items():
 		for price_range, url in value1.items():
@@ -126,8 +126,8 @@ if args.retrieve == True:
 			print("Fetching {0}".format(url))
 			response = requests.get(url, headers=my_headers)
 			if response.status_code > RESPONSE_CODE_BAD_MIN:
-				print("Failed to retrieve {0}".format(myurl))
-				print("Status code {0}",response.status_code)
+				print("Failed to retrieve {0}".format(url))
+				print("Status code {0}".format(response.status_code))
 				sys.exit()
 	
 		
